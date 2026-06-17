@@ -53,7 +53,13 @@ final class APIClient: @unchecked Sendable {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 60
-        config.httpMaximumConnectionsPerHost = 4
+        config.httpMaximumConnectionsPerHost = 6
+        config.urlCache = URLCache(
+            memoryCapacity: 10 * 1024 * 1024,   // 10MB 内存缓存
+            diskCapacity: 50 * 1024 * 1024,     // 50MB 磁盘缓存
+            diskPath: "memoir-api-cache"
+        )
+        config.requestCachePolicy = .useProtocolCachePolicy
         session = URLSession(configuration: config)
 
         decoder = JSONDecoder()
@@ -75,6 +81,57 @@ final class APIClient: @unchecked Sendable {
         body: Encodable? = nil,
         queryItems: [URLQueryItem]? = nil,
         authenticated: Bool = true
+    ) async throws -> T {
+        try await requestWithRetry(
+            path, method: method, body: body,
+            queryItems: queryItems, authenticated: authenticated,
+            maxRetries: method == .get ? 2 : 0
+        )
+    }
+
+    private func requestWithRetry<T: Decodable>(
+        _ path: String,
+        method: HTTPMethod,
+        body: Encodable?,
+        queryItems: [URLQueryItem]?,
+        authenticated: Bool,
+        maxRetries: Int,
+        attempt: Int = 1
+    ) async throws -> T {
+        do {
+            return try await performRequest(
+                path, method: method, body: body,
+                queryItems: queryItems, authenticated: authenticated
+            )
+        } catch let error as APIError {
+            // 仅对服务器错误和网络错误重试
+            if attempt < maxRetries, shouldRetry(error) {
+                let delay = Double(attempt) * 0.5
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                return try await requestWithRetry(
+                    path, method: method, body: body,
+                    queryItems: queryItems, authenticated: authenticated,
+                    maxRetries: maxRetries, attempt: attempt + 1
+                )
+            }
+            throw error
+        }
+    }
+
+    private func shouldRetry(_ error: APIError) -> Bool {
+        switch error {
+        case .serverError(let code): return code >= 500
+        case .networkError: return true
+        default: return false
+        }
+    }
+
+    private func performRequest<T: Decodable>(
+        _ path: String,
+        method: HTTPMethod,
+        body: Encodable?,
+        queryItems: [URLQueryItem]?,
+        authenticated: Bool
     ) async throws -> T {
         guard var components = URLComponents(string: "\(baseURL)\(path)") else {
             throw APIError.invalidURL
@@ -102,10 +159,13 @@ final class APIClient: @unchecked Sendable {
 
         let (data, response): (Data, URLResponse)
         do {
+            PerformanceMonitor.shared.networkRequestStarted()
             (data, response) = try await session.data(for: request)
         } catch {
+            PerformanceMonitor.shared.networkRequestCompleted()
             throw APIError.networkError(error)
         }
+        PerformanceMonitor.shared.networkRequestCompleted()
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.serverError(0)

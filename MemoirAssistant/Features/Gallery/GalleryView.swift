@@ -251,8 +251,6 @@ struct AsyncGalleryImage: View {
     @State private var image: UIImage?
     @State private var isLoading = true
 
-    private let imageCache = NSCache<NSString, UIImage>()
-
     var body: some View {
         ZStack {
             if let image = image {
@@ -275,7 +273,7 @@ struct AsyncGalleryImage: View {
                     }
             }
         }
-        .task { await loadImage() }
+        .task(id: photo.id) { await loadImage() }
     }
 
     private func loadImage() async {
@@ -287,28 +285,20 @@ struct AsyncGalleryImage: View {
             do {
                 urlString = try await GalleryService.shared.getOSSDownloadUrl(key: photo.ossKey)
             } catch {
-                isLoading = false
+                await MainActor.run { isLoading = false }
                 return
             }
         }
 
-        // 缓存检查
-        let cacheKey = NSString(string: urlString)
-        if let cached = imageCache.object(forKey: cacheKey) {
-            image = cached
-            isLoading = false
+        // 使用全局缓存管理器
+        if let cached = await ImageCacheManager.shared.loadImage(from: urlString) {
+            await MainActor.run {
+                image = cached
+                isLoading = false
+            }
             return
         }
 
-        guard let url = URL(string: urlString) else { isLoading = false; return }
-
-        do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            if let loaded = UIImage(data: data) {
-                imageCache.setObject(loaded, forKey: cacheKey)
-                await MainActor.run { image = loaded }
-            }
-        } catch {}
         await MainActor.run { isLoading = false }
     }
 }

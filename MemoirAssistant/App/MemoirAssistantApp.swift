@@ -9,6 +9,17 @@ struct MemoirAssistantApp: App {
     @State private var navigateToEditor = false
     @State private var navigateToAI = false
 
+    init() {
+        // 性能监控：标记启动开始
+        PerformanceMonitor.shared.markLaunchStart()
+        // 预热图片缓存
+        _ = ImageCacheManager.shared
+        // 初始化崩溃收集
+        _ = CrashReportService.shared
+        // 记录启动诊断
+        LogService.shared.info(CrashReportService.shared.startupDiagnostic(), category: .app)
+    }
+
     var body: some Scene {
         WindowGroup {
             Group {
@@ -99,6 +110,11 @@ struct ContentView: View {
             SiriShortcutsManager.shared.donateAllShortcuts()
             // 刷新 Widget 数据
             WidgetDataWriter.shared.refreshIfNeeded()
+            // 性能监控：标记首屏渲染完成
+            PerformanceMonitor.shared.markLaunchComplete()
+            PerformanceMonitor.shared.startMemoryMonitoring()
+            // 面包屑记录
+            CrashReportService.shared.setCurrentScreen("ContentView")
         }
         .onChange(of: navigateToEditor) { _, newValue in
             if newValue {
@@ -388,7 +404,7 @@ struct SettingsView: View {
                     HStack {
                         Text("版本")
                         Spacer()
-                        Text("1.5.0 (M6)")
+                        Text("1.6.0 (M7)")
                             .foregroundColor(MemoirColors.textSecondary)
                     }
                 }
