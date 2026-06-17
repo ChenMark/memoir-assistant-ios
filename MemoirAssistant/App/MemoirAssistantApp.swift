@@ -256,17 +256,6 @@ struct RecentMemoirsSection: View {
     }
 }
 
-struct GalleryView: View {
-    var body: some View {
-        NavigationStack {
-            Text("画廊 — M4 实现")
-                .font(.system(size: DesignTokens.Typography.title2, weight: .bold))
-                .foregroundColor(MemoirColors.textSecondary)
-                .navigationTitle("画廊")
-        }
-    }
-}
-
 struct FriendsView: View {
     var body: some View {
         NavigationStack {
@@ -336,7 +325,7 @@ struct SettingsView: View {
                     HStack {
                         Text("版本")
                         Spacer()
-                        Text("1.2.0 (M3)")
+                        Text("1.3.0 (M4)")
                             .foregroundColor(MemoirColors.textSecondary)
                     }
                 }
