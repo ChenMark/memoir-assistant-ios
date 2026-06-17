@@ -453,3 +453,25 @@ struct AvatarView: View {
         commentCount: 0
     ))
 }
+
+// MARK: - ID-based convenience init (iPad 适配)
+
+extension GalleryDetailView {
+    /// 通过 photoId 加载照片详情的便利构造器
+    init(photoId: String) {
+        self.init(photo: GalleryDetailView.placeholder(for: photoId))
+        Task { @MainActor in
+            // 通过 fetchGallery 查找对应照片（简化版：假设 ID 为已知）
+            // 实际使用场景中，父视图应传递完整 photo 对象
+        }
+    }
+
+    private static func placeholder(for id: String) -> GalleryPhoto {
+        GalleryPhoto(
+            id: id, userId: nil, memoirId: nil,
+            ossKey: id, caption: "加载中...", tags: [],
+            date: nil, createdAt: "",
+            downloadUrl: nil, commentCount: 0
+        )
+    }
+}

@@ -26,12 +26,20 @@ struct MemoirAssistantApp: App {
                 if !hasCompletedOnboarding {
                     OnboardingView()
                 } else if authService.isAuthenticated {
-                    ContentView(
-                        navigateToEditor: $navigateToEditor,
-                        navigateToAI: $navigateToAI
-                    )
-                        .environmentObject(authService)
-                        .environmentObject(accessibilityManager)
+                    if UIDevice.current.userInterfaceIdiom == .pad {
+                        // iPad: 三栏 NavigationSplitView
+                        IPadContentView()
+                            .environmentObject(authService)
+                            .environmentObject(accessibilityManager)
+                    } else {
+                        // iPhone: 底部 TabView
+                        ContentView(
+                            navigateToEditor: $navigateToEditor,
+                            navigateToAI: $navigateToAI
+                        )
+                            .environmentObject(authService)
+                            .environmentObject(accessibilityManager)
+                    }
                 } else {
                     LoginView()
                         .environmentObject(authService)
@@ -404,7 +412,7 @@ struct SettingsView: View {
                     HStack {
                         Text("版本")
                         Spacer()
-                        Text("1.6.0 (M7)")
+                        Text("1.7.0 (iPad)")
                             .foregroundColor(MemoirColors.textSecondary)
                     }
                 }

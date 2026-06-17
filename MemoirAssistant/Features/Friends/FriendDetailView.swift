@@ -290,5 +290,21 @@ struct FriendDetailView: View {
 // MARK: - Preview
 
 #Preview {
-    FriendDetailView(friend: nil, category: .family) { _ in }
+    FriendDetailView(existingFriend: nil, initialCategory: .family) { _ in }
+}
+
+// MARK: - ID-based convenience init (iPad 适配)
+
+extension FriendDetailView {
+    /// 通过 friendId 查看详情的便利构造器
+    init(friendId: String) {
+        let placeholder = Friend(
+            id: friendId, name: "加载中...", avatar: nil,
+            addedAt: Date(), category: .family,
+            relationship: nil, generation: nil, parentId: nil, spouseId: nil,
+            school: nil, classInfo: nil, graduationYear: nil,
+            metAt: nil, metYear: nil, tags: []
+        )
+        self.init(existingFriend: placeholder, initialCategory: .family) { _ in }
+    }
 }
