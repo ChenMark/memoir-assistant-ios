@@ -25,6 +25,10 @@ final class PerformanceMonitor: @unchecked Sendable {
 
     private init() {}
 
+    deinit {
+        stopMemoryMonitoring()
+    }
+
     // MARK: - 启动监控
 
     /// 在 App 初始化最早时机调用
