@@ -8,6 +8,7 @@ struct MemoirEditorView: View {
     @StateObject private var viewModel = MemoirEditorViewModel()
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focusedField: Field?
+    @State private var showVoiceInput = false
 
     enum Field {
         case title, content
@@ -78,6 +79,15 @@ struct MemoirEditorView: View {
         } message: {
             Text(viewModel.errorMessage ?? "未知错误")
         }
+        .sheet(isPresented: $showVoiceInput) {
+            VoiceInputView { text in
+                if viewModel.content.isEmpty {
+                    viewModel.content = text
+                } else {
+                    viewModel.content += "\n\n\(text)"
+                }
+            }
+        }
         .task {
             if let memoir = editMemoir {
                 viewModel.loadFromMemoir(memoir)
@@ -132,9 +142,24 @@ struct MemoirEditorView: View {
 
     private var contentField: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
-            Text("内容")
-                .font(.system(size: DesignTokens.Typography.caption, weight: .medium))
-                .foregroundColor(MemoirColors.textTertiary)
+            HStack {
+                Text("内容")
+                    .font(.system(size: DesignTokens.Typography.caption, weight: .medium))
+                    .foregroundColor(MemoirColors.textTertiary)
+                Spacer()
+                // 语音输入按钮
+                Button {
+                    showVoiceInput = true
+                } label: {
+                    Label("语音输入", systemImage: "mic.fill")
+                        .font(.system(size: DesignTokens.Typography.caption, weight: .medium))
+                        .foregroundColor(MemoirColors.primary)
+                        .padding(.horizontal, DesignTokens.Spacing.sm)
+                        .padding(.vertical, 4)
+                        .background(MemoirColors.primary.opacity(0.1))
+                        .clipShape(Capsule())
+                }
+            }
 
             ZStack(alignment: .topLeading) {
                 if viewModel.content.isEmpty {
