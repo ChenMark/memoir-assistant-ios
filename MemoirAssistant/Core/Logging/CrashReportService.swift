@@ -1,9 +1,11 @@
 import Foundation
 import UIKit
+import Darwin // sigaction, write, fsync, raise
 
 // MARK: - 崩溃收集与诊断服务
+// 设计原则：信号处理器只使用异步信号安全函数（man 7 signal-safety）
+// logger.critical() 不是异步信号安全的，不能在信号处理器中调用
 
-/// 管理全局异常捕获、崩溃上下文记录、启动诊断
 final class CrashReportService: @unchecked Sendable {
     static let shared = CrashReportService()
 
@@ -16,52 +18,116 @@ final class CrashReportService: @unchecked Sendable {
 
     private let logger = LogService.shared
 
+    // 信号处理器专用的文件描述符（在 init 中打开，信号处理器中只做 write(fd, ...)）
+    private var signalLogFD: Int32 = -1
+    // 标记是否已安装信号处理器（防止重复初始化）
+    private static var signalHandlersInstalled = false
+
     private init() {
         sessionStartTime = Date()
+        prepareSignalLogFile()
         setupExceptionHandler()
+        setupSignalHandlers()
     }
 
-    // MARK: - 异常捕获
+    // MARK: - 信号日志文件准备
+
+    /// 在 init 阶段打开文件描述符，供信号处理器异步信号安全地写入
+    private func prepareSignalLogFile() {
+        guard let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
+        let crashDir = dir.appendingPathComponent("CrashLogs")
+        try? FileManager.default.createDirectory(at: crashDir, withIntermediateDirectories: true)
+
+        let dateStr = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+        let fileURL = crashDir.appendingPathComponent("signal-\(dateStr).log")
+
+        // open() 是异步信号安全的系统调用，在 init 阶段调用
+        let fd = open(fileURL.path, O_WRONLY | O_CREAT | O_APPEND, 0o644)
+        if fd >= 0 {
+            signalLogFD = fd
+        } else {
+            // 无法创建文件，记录到 OSLog（此时不在信号上下文中，安全）
+            logger.error("无法创建信号日志文件: \(errno)")
+        }
+    }
+
+    // MARK: - NSException 处理器（安全，运行在主线程）
 
     private func setupExceptionHandler() {
-        // 捕获未处理的 NSException
-        NSSetUncaughtExceptionHandler { exception in
-            CrashReportService.shared.handleException(exception)
+        NSSetUncaughtExceptionHandler { [weak self] exception in
+            self?.handleException(exception)
         }
-
-        // 监听信号
-        signal(SIGABRT) { _ in CrashReportService.shared.handleSignal("SIGABRT") }
-        signal(SIGILL)  { _ in CrashReportService.shared.handleSignal("SIGILL") }
-        signal(SIGSEGV) { _ in CrashReportService.shared.handleSignal("SIGSEGV") }
-        signal(SIGBUS)  { _ in CrashReportService.shared.handleSignal("SIGBUS") }
-        signal(SIGTRAP) { _ in CrashReportService.shared.handleSignal("SIGTRAP") }
     }
 
     private func handleException(_ exception: NSException) {
         let crashInfo = """
         🚨 未捕获的异常
-        ━━━━━━━━━━━━━━━━━━━━
+        ━━━━━━━━━━━━━━━━━━━
         名称: \(exception.name.rawValue)
         原因: \(exception.reason ?? "未知")
         用户信息: \(exception.userInfo ?? [:])
         调用栈:
         \(exception.callStackSymbols.joined(separator: "\n"))
-        ━━━━━━━━━━━━━━━━━━━━
+        ━━━━━━━━━━━━━━━━━━━
         面包屑:
         \(breadcrumbs.joined(separator: "\n"))
-        ━━━━━━━━━━━━━━━━━━━━
+        ━━━━━━━━━━━━━━━━━━━
         最后屏幕: \(lastScreen)
         会话时长: \(String(format: "%.0f", Date().timeIntervalSince(sessionStartTime)))s
         """
 
         logger.critical(crashInfo)
-
-        // 保存到文件
         saveCrashLog(crashInfo)
     }
 
-    private func handleSignal(_ name: String) {
-        logger.critical("🚨 收到信号: \(name) | 屏幕: \(self.lastScreen)")
+    // MARK: - 信号处理器（仅使用异步信号安全函数）
+
+    /// 信号处理器：只调用异步信号安全函数（write, fsync, raise）
+    /// 完整列表见: man 7 signal-safety
+    private static let signalHandler: @convention(c) (CInt) -> Void = { signalNum in
+        let service = CrashReportService.shared
+
+        // 1. 写入信号编号到预打开的文件描述符（write 是异步信号安全的）
+        if service.signalLogFD >= 0 {
+            let msg = "Signal received: \(signalNum)\n"
+            _ = msg.withCString { ptr in
+                write(service.signalLogFD, ptr, strlen(ptr))
+            }
+            // fsync 是异步信号安全的
+            fsync(service.signalLogFD)
+        }
+
+        // 2. 恢复默认处理器并重新触发信号，让系统生成标准崩溃报告
+        // raise() 是异步信号安全的
+        raise(signalNum)
+    }
+
+    private func setupSignalHandlers() {
+        // 防止重复安装
+        guard !Self.signalHandlersInstalled else { return }
+        Self.signalHandlersInstalled = true
+
+        var sa = sigaction()
+        sigemptyset(&sa.sa_mask)
+        sa.sa_handler = Self.signalHandler
+        sa.sa_flags = 0
+
+        // 使用 sigaction 而非 signal()（sigaction 行为更可预测）
+        let signals: [CInt] = [SIGABRT, SIGILL, SIGSEGV, SIGBUS, SIGTRAP]
+        for sig in signals {
+            var oldAction = sigaction()
+            if sigaction(sig, &sa, &oldAction) == -1 {
+                logger.error("sigaction 安装失败 for signal \(sig): \(errno)")
+            }
+        }
+    }
+
+    deinit {
+        // 关闭文件描述符
+        if signalLogFD >= 0 {
+            close(signalLogFD)
+            signalLogFD = -1
+        }
     }
 
     // MARK: - 面包屑追踪
@@ -88,13 +154,13 @@ final class CrashReportService: @unchecked Sendable {
 
         return """
         📱 设备信息
-        ━━━━━━━━━━━━━━━━━━━━
+        ━━━━━━━━━━━━━━━━━━━
         设备: \(device.model)
         系统: \(device.systemName) \(device.systemVersion)
         内存: \(String(format: "%.0f", memory))MB
-        App 版本: 1.6.0 (M7)
+        App 版本: 1.7.0 (iPad)
         启动耗时: \(String(format: "%.2f", PerformanceMonitor.shared.launchDuration))s
-        ━━━━━━━━━━━━━━━━━━━━
+        ━━━━━━━━━━━━━━━━━━━
         """
     }
 
