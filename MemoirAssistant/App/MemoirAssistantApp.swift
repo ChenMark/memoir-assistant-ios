@@ -58,11 +58,17 @@ struct ContentView: View {
                 }
                 .tag(3)
 
+            FriendListView()
+                .tabItem {
+                    Label("亲友", systemImage: "person.2.fill")
+                }
+                .tag(4)
+
             SettingsView()
                 .tabItem {
                     Label("设置", systemImage: "gearshape.fill")
                 }
-                .tag(4)
+                .tag(5)
         }
         .font(.system(size: DesignTokens.Typography.tab))
     }
@@ -256,17 +262,6 @@ struct RecentMemoirsSection: View {
     }
 }
 
-struct FriendsView: View {
-    var body: some View {
-        NavigationStack {
-            Text("亲友管理 — M5 实现")
-                .font(.system(size: DesignTokens.Typography.title2, weight: .bold))
-                .foregroundColor(MemoirColors.textSecondary)
-                .navigationTitle("亲友")
-        }
-    }
-}
-
 // MARK: - 设置页
 
 struct SettingsView: View {
@@ -286,6 +281,15 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("账户")
+                }
+
+                // 内容管理
+                Section {
+                    NavigationLink(destination: HobbyView()) {
+                        Label("我的爱好", systemImage: "heart.fill")
+                    }
+                } header: {
+                    Text("内容")
                 }
 
                 // 当前用户
@@ -325,7 +329,7 @@ struct SettingsView: View {
                     HStack {
                         Text("版本")
                         Spacer()
-                        Text("1.3.0 (M4)")
+                        Text("1.4.0 (M5)")
                             .foregroundColor(MemoirColors.textSecondary)
                     }
                 }
