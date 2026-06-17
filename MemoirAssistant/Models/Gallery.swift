@@ -78,17 +78,7 @@ struct CommentUser: Codable, Equatable {
     let avatar: String?
 }
 
-// MARK: - OSS 签名响应
-
-struct OSSSignResponse: Codable {
-    let url: String
-}
-
-// MARK: - OSS 下载响应
-
-struct OSSDownloadResponse: Codable {
-    let url: String
-}
+// MARK: - 画廊创建请求体
 
 // MARK: - 分享信息响应
 

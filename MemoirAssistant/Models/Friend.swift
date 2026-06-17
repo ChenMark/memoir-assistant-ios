@@ -128,11 +128,11 @@ enum Generation: Int, CaseIterable {
     case greatGrandparent = 3
     case grandparent = 2
     case greatUncle = 1
-    case parent = 1
-    case selfGen = 0
-    case child = -1
-    case grandchild = -2
-    case greatGrandchild = -3
+    case parent = 0
+    case selfGen = -1
+    case child = -2
+    case grandchild = -3
+    case greatGrandchild = -4
 
     var displayName: String {
         switch self {
@@ -160,12 +160,13 @@ enum Generation: Int, CaseIterable {
 
     /// 返回适合选择的 generation 列表（去重）
     static var selectableOptions: [(label: String, value: Int)] {
-        [(label: "祖辈 (+3)", value: 3),
+        [(label: "曾祖 (+3)", value: 3),
          (label: "祖辈 (+2)", value: 2),
-         (label: "父辈 (+1)", value: 1),
-         (label: "同辈 (0)", value: 0),
-         (label: "子女辈 (-1)", value: -1),
-         (label: "孙辈 (-2)", value: -2),
-         (label: "曾孙辈 (-3)", value: -3)]
+         (label: "叔伯 (+1)", value: 1),
+         (label: "父辈 (0)", value: 0),
+         (label: "同辈 (-1)", value: -1),
+         (label: "子女 (-2)", value: -2),
+         (label: "孙辈 (-3)", value: -3),
+         (label: "曾孙 (-4)", value: -4)]
     }
 }

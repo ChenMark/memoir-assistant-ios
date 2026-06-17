@@ -1,5 +1,6 @@
 import UIKit
 import Foundation
+import CommonCrypto
 
 // MARK: - 全局图片缓存管理器
 
@@ -99,8 +100,11 @@ final class ImageCacheManager: @unchecked Sendable {
     // MARK: - 私有方法
 
     private func cacheKey(from url: String) -> String {
-        // SHA256 前 16 位作为缓存 key
-        return String(url.hashValue & 0xFFFF)
+        // SHA256 前 16 字节 → 32 hex 字符，2^128 空间，无碰撞
+        guard let data = url.data(using: .utf8) else { return url }
+        var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+        data.withUnsafeBytes { _ = CC_SHA256($0.baseAddress, CC_LONG(data.count), &hash) }
+        return hash.prefix(16).map { String(format: "%02x", $0) }.joined()
     }
 
     private func loadFromDisk(key: String) async -> UIImage? {

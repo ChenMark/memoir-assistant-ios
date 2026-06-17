@@ -38,9 +38,10 @@ final class WidgetDataWriter {
                 )
             }()
 
-            // 最近的回忆录列表（排除今天那篇）
+            // 最近的回忆录列表（排除今天那篇），按 ID 去重
+            let dailyId = dailyMemoir?.id
             let recentItems = memoirs
-                .filter { $0.id != dailyMemoir?.title } // 简单去重
+                .filter { $0.id != dailyId }
                 .prefix(5)
                 .map { WidgetMemoirItem(title: $0.title, date: $0.date) }
 

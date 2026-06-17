@@ -14,7 +14,7 @@ final class VoiceInputService: NSObject, ObservableObject, SFSpeechRecognizerDel
     @Published var authorizationStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     @Published var audioLevels: [CGFloat] = Array(repeating: 0, count: 20) // 波形可视化
 
-    private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))!
+    private let speechRecognizer: SFSpeechRecognizer?
     private let audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
@@ -24,8 +24,9 @@ final class VoiceInputService: NSObject, ObservableObject, SFSpeechRecognizerDel
     // MARK: - 初始化
 
     override init() {
+        speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
         super.init()
-        speechRecognizer.delegate = self
+        speechRecognizer?.delegate = self
         SFSpeechRecognizer.requestAuthorization { [weak self] status in
             Task { @MainActor in
                 self?.authorizationStatus = status
@@ -90,7 +91,10 @@ final class VoiceInputService: NSObject, ObservableObject, SFSpeechRecognizerDel
         lastTranscription = ""
 
         // 开始识别
-        recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
+        guard let recognizer = speechRecognizer else {
+            throw VoiceError.recognitionUnavailable
+        }
+        recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
             guard let self = self else { return }
 
             if let result = result {
