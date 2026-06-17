@@ -46,15 +46,15 @@ struct ContentView: View {
                 }
                 .tag(1)
 
-            GalleryView()
+            AIInterviewView()
                 .tabItem {
-                    Label("画廊", systemImage: "photo.on.rectangle.angled")
+                    Label("AI访谈", systemImage: "bubble.left.and.bubble.right.fill")
                 }
                 .tag(2)
 
-            FriendsView()
+            GalleryView()
                 .tabItem {
-                    Label("亲友", systemImage: "person.2.fill")
+                    Label("画廊", systemImage: "photo.on.rectangle.angled")
                 }
                 .tag(3)
 
@@ -68,26 +68,190 @@ struct ContentView: View {
     }
 }
 
-// MARK: - 占位视图
+// MARK: - 首页仪表盘
 
 struct DashboardView: View {
+    @EnvironmentObject var authService: AuthService
+
     var body: some View {
         NavigationStack {
-            Text("首页仪表盘 — M3 实现")
-                .font(.system(size: DesignTokens.Typography.title2, weight: .bold))
-                .foregroundColor(MemoirColors.textSecondary)
-                .navigationTitle("忆往昔")
+            ScrollView {
+                VStack(spacing: DesignTokens.Spacing.lg) {
+                    // 欢迎卡片
+                    welcomeCard
+
+                    // 快捷入口
+                    quickActions
+
+                    // 最近回忆录
+                    recentMemoirs
+                }
+                .padding(DesignTokens.Spacing.lg)
+            }
+            .background(MemoirColors.background)
+            .navigationTitle("忆往昔")
+            .navigationBarTitleDisplayMode(.large)
+        }
+    }
+
+    // MARK: - 欢迎卡片
+
+    private var welcomeCard: some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.sm) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let user = authService.currentUser {
+                        Text("你好，\(user.username)")
+                            .font(.system(size: DesignTokens.Typography.title2, weight: .bold))
+                            .foregroundColor(MemoirColors.textPrimary)
+                    } else {
+                        Text("你好")
+                            .font(.system(size: DesignTokens.Typography.title2, weight: .bold))
+                            .foregroundColor(MemoirColors.textPrimary)
+                    }
+                    Text("今天想记录什么回忆？")
+                        .font(.system(size: DesignTokens.Typography.body))
+                        .foregroundColor(MemoirColors.textSecondary)
+                }
+                Spacer()
+                Image(systemName: "book.pages.fill")
+                    .font(.system(size: 40))
+                    .foregroundColor(MemoirColors.primary.opacity(0.3))
+            }
+        }
+        .padding(DesignTokens.Spacing.lg)
+        .background(MemoirColors.card)
+        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.xl))
+        .shadow(
+            color: DesignTokens.Shadow.card.color,
+            radius: DesignTokens.Shadow.card.radius,
+            y: DesignTokens.Shadow.card.y
+        )
+    }
+
+    // MARK: - 快捷入口
+
+    private var quickActions: some View {
+        HStack(spacing: DesignTokens.Spacing.md) {
+            NavigationLink(destination: MemoirEditorView()) {
+                quickActionCard(
+                    icon: "square.and.pencil",
+                    title: "写回忆录",
+                    color: MemoirColors.primary
+                )
+            }
+            .buttonStyle(.plain)
+
+            NavigationLink(destination: AIInterviewView()) {
+                quickActionCard(
+                    icon: "brain.head.profile",
+                    title: "AI 访谈",
+                    color: Color(red: 0.4, green: 0.3, blue: 0.7)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func quickActionCard(icon: String, title: String, color: Color) -> some View {
+        VStack(spacing: DesignTokens.Spacing.sm) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundColor(.white)
+                .frame(width: 48, height: 48)
+                .background(color)
+                .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
+
+            Text(title)
+                .font(.system(size: DesignTokens.Typography.bodySmall, weight: .medium))
+                .foregroundColor(MemoirColors.textPrimary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DesignTokens.Spacing.lg)
+        .background(MemoirColors.card)
+        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.lg))
+        .shadow(
+            color: DesignTokens.Shadow.card.color,
+            radius: DesignTokens.Shadow.card.radius,
+            y: DesignTokens.Shadow.card.y
+        )
+    }
+
+    // MARK: - 最近回忆录
+
+    private var recentMemoirs: some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
+            HStack {
+                Text("最近回忆录")
+                    .font(.system(size: DesignTokens.Typography.headline, weight: .semibold))
+                    .foregroundColor(MemoirColors.textPrimary)
+                Spacer()
+                NavigationLink("查看全部") {
+                    MemoirListView()
+                }
+                .font(.system(size: DesignTokens.Typography.bodySmall))
+                .foregroundColor(MemoirColors.primary)
+            }
+
+            RecentMemoirsSection()
         }
     }
 }
 
-struct MemoirListView: View {
+// MARK: - 最近回忆录小组件
+
+struct RecentMemoirsSection: View {
+    @State private var memoirs: [Memoir] = []
+    @State private var isLoading = true
+
     var body: some View {
-        NavigationStack {
-            Text("回忆录列表 — M3 实现")
-                .font(.system(size: DesignTokens.Typography.title2, weight: .bold))
-                .foregroundColor(MemoirColors.textSecondary)
-                .navigationTitle("回忆录")
+        Group {
+            if isLoading {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+                .padding()
+            } else if memoirs.isEmpty {
+                Text("还没有回忆录，点击上方按钮开始记录")
+                    .font(.system(size: DesignTokens.Typography.bodySmall))
+                    .foregroundColor(MemoirColors.textTertiary)
+                    .padding()
+            } else {
+                VStack(spacing: DesignTokens.Spacing.sm) {
+                    ForEach(memoirs.prefix(3)) { memoir in
+                        NavigationLink(destination: MemoirDetailView(memoirId: memoir.id)) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(memoir.title)
+                                        .font(.system(size: DesignTokens.Typography.body, weight: .medium))
+                                        .foregroundColor(MemoirColors.textPrimary)
+                                        .lineLimit(1)
+                                    Text(memoir.date)
+                                        .font(.system(size: DesignTokens.Typography.caption))
+                                        .foregroundColor(MemoirColors.textTertiary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(MemoirColors.textTertiary)
+                            }
+                            .padding(DesignTokens.Spacing.md)
+                            .background(MemoirColors.card)
+                            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.md))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .task {
+            do {
+                let response = try await MemoirService.shared.fetchMemoirs(page: 1, limit: 3)
+                memoirs = response.data
+            } catch {}
+            isLoading = false
         }
     }
 }
@@ -172,7 +336,7 @@ struct SettingsView: View {
                     HStack {
                         Text("版本")
                         Spacer()
-                        Text("1.1.0 (M2)")
+                        Text("1.2.0 (M3)")
                             .foregroundColor(MemoirColors.textSecondary)
                     }
                 }
